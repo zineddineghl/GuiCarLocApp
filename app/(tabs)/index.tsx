@@ -1,98 +1,242 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import {
+  Image,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useAuth } from "../../context/AuthContext";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const COLORS = {
+  bg: "#0A0A0A",
+  card: "#161616",
+  accent: "#FFD700",
+  text: "#FFFFFF",
+  textMuted: "#A0A0A0",
+  border: "#222222",
+};
 
-export default function HomeScreen() {
+export default function AccueilScreen() {
+  const { user } = useAuth();
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <StatusBar barStyle="light-content" />
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.greetingBox}>
+          <Text style={styles.greeting}>
+            BONJOUR
+            {user?.name ? `, ${user.name.split(" ")[0].toUpperCase()}` : ""}
+          </Text>
+          <Text style={styles.subGreeting}>
+            L'excellence automobile en Guinée
+          </Text>
+        </View>
+
+        {/* Ton nouveau logo */}
+        <Image
+          source={require("../../assets/images/logo.png")}
+          style={styles.logo}
+        />
+      </View>
+
+      {/* Boutons rapides */}
+      <View style={styles.quickActions}>
+        <TouchableOpacity
+          style={styles.quickBtn}
+          onPress={() => router.push("/(tabs)/voitures")}
+        >
+          <View style={styles.quickIconBox}>
+            <Ionicons name="search" size={18} color={COLORS.accent} />
+          </View>
+          <Text style={styles.quickBtnText}>Parcourir notre catalogue</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.quickBtn, styles.quickBtnPrimary]}
+          onPress={() => router.push("/(tabs)/publier")}
+        >
+          <View style={[styles.quickIconBox, { backgroundColor: COLORS.bg }]}>
+            <Ionicons name="add" size={18} color={COLORS.accent} />
+          </View>
+          <Text style={[styles.quickBtnText, { color: COLORS.bg }]}>
+            Publier une annonce
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Stats / Raccourcis */}
+      <View style={styles.statsRow}>
+        <TouchableOpacity
+          style={styles.statCard}
+          onPress={() => router.push("/(tabs)/voitures")}
+        >
+          <Ionicons name="car-sport" size={28} color={COLORS.accent} />
+          <Text style={styles.statLabel}>Véhicules{"\n"}disponibles</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.statCard}
+          onPress={() => router.push("/mes-reservations")}
+        >
+          <Ionicons name="calendar" size={28} color={COLORS.textMuted} />
+          <Text style={styles.statLabel}>Mes{"\n"}réservations</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.statCard}
+          onPress={() => router.push("/favoris")}
+        >
+          <Ionicons name="heart" size={28} color={COLORS.textMuted} />
+          <Text style={styles.statLabel}>Mes{"\n"}favoris</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Info Premium */}
+      <View style={styles.infoCard}>
+        <View style={styles.infoHeader}>
+          <Ionicons name="star" size={16} color={COLORS.accent} />
+          <Text style={styles.infoTitle}>L'EXPÉRIENCE GUICARLOC</Text>
+        </View>
+        <Text style={styles.infoText}>
+          La première plateforme de location de véhicules de prestige et de
+          confort en Guinée. Louez ou proposez vos véhicules en toute sécurité
+          et simplicité.
+        </Text>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  content: {
+    padding: 24,
+    paddingTop: Platform.OS === "ios" ? 60 : 40,
+    paddingBottom: 40,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 32,
+  },
+  greetingBox: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  greeting: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: COLORS.text,
+    letterSpacing: -0.5,
+  },
+  subGreeting: {
+    fontSize: 13,
+    color: COLORS.accent,
+    marginTop: 4,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  logo: {
+    width: 60,
+    height: 60,
+    borderRadius: 30, // Rend l'image parfaitement ronde
+    borderWidth: 1,
+    borderColor: "rgba(255, 215, 0, 0.4)", // Bordure dorée pour le côté néon
+    resizeMode: "cover",
+  },
+  quickActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 32,
+  },
+  quickBtn: {
+    flex: 1,
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  quickBtnPrimary: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
+  },
+  quickIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 215, 0, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: COLORS.text,
+    textAlign: "center",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 32,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  statLabel: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    textAlign: "center",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  infoCard: {
+    backgroundColor: "rgba(255, 215, 0, 0.05)",
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255, 215, 0, 0.15)",
+  },
+  infoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: COLORS.accent,
+    letterSpacing: 1,
+  },
+  infoText: {
+    fontSize: 13,
+    color: "#D1D5DB",
+    lineHeight: 22,
+    fontWeight: "500",
   },
 });
