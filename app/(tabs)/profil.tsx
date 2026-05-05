@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
+import { requestNotificationPermission } from "../../hooks/usePushNotifications";
 
 const COLORS = {
   bg: "#0A0A0A",
@@ -26,10 +27,23 @@ type MenuItemType = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  badge?: { label: string; color: string };
 };
 
 export default function ProfilScreen() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, token } = useAuth();
+
+  const handleNotifications = async () => {
+    if (!token) return;
+    const result = await requestNotificationPermission(token);
+    if (result === 'granted') {
+      Alert.alert('Notifications activées', 'Vous recevrez des notifications pour vos réservations et messages.');
+    } else if (result === 'already_granted') {
+      Alert.alert('Déjà activées', 'Les notifications sont déjà activées sur cet appareil.');
+    } else {
+      Alert.alert('Notifications refusées', 'Activez les notifications dans les réglages de votre téléphone.');
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert("Déconnexion", "Êtes-vous sûr de vouloir vous déconnecter ?", [
@@ -69,6 +83,14 @@ export default function ProfilScreen() {
     },
   ];
 
+  const idStatusLabel: Record<string, { label: string; color: string }> = {
+    verified: { label: "Vérifié", color: "#10B981" },
+    pending: { label: "En attente", color: "#F59E0B" },
+    rejected: { label: "Refusé", color: "#FF4444" },
+    none: { label: "Non vérifié", color: "#A0A0A0" },
+  };
+  const idInfo = idStatusLabel[user?.id_status ?? "none"];
+
   const accountItems: MenuItemType[] = [
     {
       icon: "person-outline",
@@ -76,16 +98,20 @@ export default function ProfilScreen() {
       onPress: () => router.push(`/user/${user?.id}` as any),
     },
     {
+      icon: "shield-checkmark-outline",
+      label: "Vérification d'identité",
+      onPress: () => router.push("/verify-identity" as any),
+      badge: idInfo,
+    },
+    {
       icon: "lock-closed-outline",
       label: "Sécurité et mot de passe",
-      onPress: () => {
-        router.push("/securite" as any);
-      },
+      onPress: () => router.push("/securite" as any),
     },
     {
       icon: "notifications-outline",
       label: "Notifications",
-      onPress: () => {},
+      onPress: handleNotifications,
     },
   ];
 
@@ -154,7 +180,14 @@ function MenuRow({ item, last }: { item: MenuItemType; last: boolean }) {
         </View>
         <Text style={styles.menuLabel}>{item.label}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        {item.badge && (
+          <View style={[styles.badge, { borderColor: item.badge.color }]}>
+            <Text style={[styles.badgeText, { color: item.badge.color }]}>{item.badge.label}</Text>
+          </View>
+        )}
+        <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+      </View>
     </TouchableOpacity>
   );
 }
@@ -243,6 +276,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   menuLabel: { fontSize: 15, fontWeight: "600", color: COLORS.text },
+  badge: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  badgeText: { fontSize: 10, fontWeight: "800" },
   signOutBtn: {
     flexDirection: "row",
     alignItems: "center",

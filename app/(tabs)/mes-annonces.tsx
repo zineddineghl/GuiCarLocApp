@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -44,9 +44,11 @@ export default function MesAnnoncesScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetchMyCars();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyCars();
+    }, [])
+  );
 
   const fetchMyCars = async () => {
     setLoading(true);
@@ -212,15 +214,17 @@ export default function MesAnnoncesScreen() {
               <View style={styles.actions}>
                 <TouchableOpacity
                   style={styles.editBtn}
-                  onPress={() =>
-                    Alert.alert(
-                      "Édition",
-                      "Fonctionnalité en cours de développement",
-                    )
-                  }
+                  onPress={() => router.push(`/cars/edit/${car.id}` as any)}
                 >
                   <Ionicons name="create-outline" size={18} color={COLORS.bg} />
                   <Text style={styles.editBtnText}>MODIFIER</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.calBtn}
+                  onPress={() => router.push(`/cars/blocked-dates/${car.id}` as any)}
+                >
+                  <Ionicons name="calendar-outline" size={20} color={COLORS.accent} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -351,6 +355,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   editBtnText: { color: COLORS.bg, fontWeight: "900", fontSize: 13 },
+  calBtn: {
+    width: 48,
+    height: 48,
+    backgroundColor: "rgba(255, 215, 0, 0.05)",
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 215, 0, 0.2)",
+  },
   deleteBtn: {
     width: 48,
     height: 48,

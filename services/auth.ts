@@ -13,6 +13,8 @@ export interface User {
   email_verified: number;
   created_at: string;
   avatar?: string;
+  id_status?: "none" | "pending" | "verified" | "rejected";
+  id_rejection_reason?: string | null;
 }
 
 export interface RegisterPayload {

@@ -1,5 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import {
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isAfter,
+  isBefore,
+  isSameDay,
+  isSameMonth,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+} from "date-fns";
+import { fr } from "date-fns/locale";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -43,11 +58,31 @@ export default function CarDetailScreen() {
   const [endDate, setEndDate] = useState("");
   const [message, setMessage] = useState("");
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookedRanges, setBookedRanges] = useState<Array<{ start_date: string; end_date: string }>>([]);
+  const [reviews, setReviews] = useState<Array<{ id: number; car_rating: number; owner_rating: number; comment: string; reviewer_name: string; created_at: string }>>([]);
 
   useEffect(() => {
     fetchCar();
+    fetchBookedRanges();
+    fetchReviews();
     if (token) fetchFavStatus();
   }, [id]);
+
+  const fetchBookedRanges = async () => {
+    try {
+      const res = await fetch(`${API_URL}/bookings/car/${id}/booked-dates`);
+      const data = await res.json();
+      setBookedRanges(data.ranges || []);
+    } catch {}
+  };
+
+  const fetchReviews = async () => {
+    try {
+      const res = await fetch(`${API_URL}/reviews/car/${id}`);
+      const data = await res.json();
+      setReviews(data.reviews || []);
+    } catch {}
+  };
 
   const fetchCar = async () => {
     try {
@@ -86,17 +121,61 @@ export default function CarDetailScreen() {
     } catch { setIsFav(!newFav); }
   };
 
-  const calcDays = () => {
-    const s = new Date(startDate), e = new Date(endDate);
-    if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
-    const d = Math.ceil((e.getTime() - s.getTime()) / 86400000);
-    return d > 0 ? d : 0;
+  const calcPrice = () => {
+    if (!startDate || !endDate || !car) return null;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    const totalDays = Math.round((end.getTime() - start.getTime()) / 86400000) || 1;
+    if (totalDays <= 0) return null;
+
+    let weekDays = 0, weekendDays = 0;
+    const cur = new Date(start);
+    for (let i = 0; i < totalDays; i++) {
+      const d = cur.getDay();
+      if (d === 0 || d === 6) weekendDays++; else weekDays++;
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    const standardPrice = Number(car.price_per_day);
+    const wEPrice = car.weekend_price ? Number(car.weekend_price) : standardPrice;
+    const totalWeek = weekDays * standardPrice;
+    const totalWeekend = weekendDays * wEPrice;
+    const subtotal = totalWeek + totalWeekend;
+
+    let percentage = 0;
+    if (car.discounts) {
+      const discArray = typeof car.discounts === 'string' ? JSON.parse(car.discounts) : car.discounts;
+      if (Array.isArray(discArray) && discArray.length > 0) {
+        const sorted = [...discArray].sort((a: any, b: any) => b.days - a.days);
+        const rule = sorted.find((r: any) => totalDays >= r.days);
+        if (rule) percentage = parseFloat(rule.percentage);
+      }
+    }
+
+    const discountAmount = (subtotal * percentage) / 100;
+    return { totalDays, weekDays, weekendDays, standardPrice, wEPrice, totalWeek, totalWeekend, subtotal, discountAmount, percentage, total: subtotal - discountAmount };
+  };
+
+  const sendReport = async (reason: string) => {
+    try {
+      await fetch(`${API_URL}/reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ car_id: Number(id), reason }),
+      });
+      Alert.alert("Signalement envoyé", "Merci, nous allons examiner cette annonce.");
+    } catch {
+      Alert.alert("Erreur", "Impossible d'envoyer le signalement.");
+    }
   };
 
   const handleBook = async () => {
     if (!token) { router.push("/(auth)/login" as any); return; }
-    const days = calcDays();
-    if (days <= 0) { Alert.alert("Erreur", "Dates invalides. Format : AAAA-MM-JJ"); return; }
+    const priceInfo = calcPrice();
+    if (!priceInfo) { Alert.alert("Erreur", "Dates invalides. Format : AAAA-MM-JJ"); return; }
+    const days = priceInfo.totalDays;
     setBookingLoading(true);
     try {
       const res = await fetch(`${API_URL}/bookings`, {
@@ -144,8 +223,7 @@ export default function CarDetailScreen() {
   }
 
   const images: string[] = Array.isArray(car.images) && car.images.length > 0 ? car.images : [];
-  const days = calcDays();
-  const total = days * Number(car.price_per_day);
+  const priceInfo = calcPrice();
   const available = car.available === 1 || car.available === true;
   const isOwner = user?.id === car.owner_id;
 
@@ -273,6 +351,53 @@ export default function CarDetailScreen() {
             </View>
           </View>
 
+          {/* Signaler */}
+          {token && !isOwner && (
+            <TouchableOpacity
+              style={styles.reportBtn}
+              onPress={() =>
+                Alert.alert(
+                  "Signaler cette annonce",
+                  "Choisissez une raison",
+                  [
+                    { text: "Contenu inapproprié", onPress: () => sendReport("Contenu inapproprié") },
+                    { text: "Fraude / Arnaque", onPress: () => sendReport("Fraude / Arnaque") },
+                    { text: "Informations incorrectes", onPress: () => sendReport("Informations incorrectes") },
+                    { text: "Autre", onPress: () => sendReport("Autre") },
+                    { text: "Annuler", style: "cancel" },
+                  ]
+                )
+              }
+            >
+              <Ionicons name="flag-outline" size={14} color={COLORS.textMuted} />
+              <Text style={styles.reportBtnText}>Signaler cette annonce</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Avis */}
+          {reviews.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>AVIS ({reviews.length})</Text>
+              {reviews.map((r) => (
+                <View key={r.id} style={styles.reviewCard}>
+                  <View style={styles.reviewHeader}>
+                    <Text style={styles.reviewerName}>{r.reviewer_name}</Text>
+                    <Text style={styles.reviewDate}>
+                      {new Date(r.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}
+                    </Text>
+                  </View>
+                  <View style={styles.reviewStars}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Ionicons key={n} name={n <= r.car_rating ? "star" : "star-outline"} size={14} color={COLORS.accent} />
+                    ))}
+                    <Text style={styles.reviewRatingNum}>{r.car_rating}/5</Text>
+                  </View>
+                  {r.comment ? <Text style={styles.reviewComment}>{r.comment}</Text> : null}
+                </View>
+              ))}
+            </View>
+          )}
+
           <View style={{ height: 100 }} />
         </View>
       </ScrollView>
@@ -305,26 +430,15 @@ export default function CarDetailScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.modalSub}>{car.brand} {car.model} · {car.year}</Text>
-
-            <Text style={styles.fieldLabel}>DATE DE DÉBUT (AAAA-MM-JJ)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="ex: 2025-06-01"
-              placeholderTextColor={COLORS.textMuted}
-              value={startDate}
-              onChangeText={setStartDate}
+            <ScrollView showsVerticalScrollIndicator={false}>
+            <CalendarPicker
+              startDate={startDate}
+              endDate={endDate}
+              bookedRanges={bookedRanges}
+              onSelect={(start, end) => { setStartDate(start); setEndDate(end); }}
             />
 
-            <Text style={styles.fieldLabel}>DATE DE FIN (AAAA-MM-JJ)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="ex: 2025-06-05"
-              placeholderTextColor={COLORS.textMuted}
-              value={endDate}
-              onChangeText={setEndDate}
-            />
-
-            <Text style={styles.fieldLabel}>MESSAGE (OPTIONNEL)</Text>
+            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>MESSAGE (OPTIONNEL)</Text>
             <TextInput
               style={[styles.input, { height: 72, textAlignVertical: "top" }]}
               placeholder="Message au propriétaire..."
@@ -334,15 +448,33 @@ export default function CarDetailScreen() {
               multiline
             />
 
-            {days > 0 && (
+            {priceInfo && (
               <View style={styles.priceSummary}>
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceRowLabel}>{days} jour(s) × {Number(car.price_per_day).toLocaleString()} GNF</Text>
-                  <Text style={styles.priceRowVal}>{total.toLocaleString()} GNF</Text>
+                {priceInfo.weekDays > 0 && (
+                  <View style={styles.priceRow}>
+                    <Text style={styles.priceRowLabel}>{priceInfo.weekDays} jour(s) semaine × {priceInfo.standardPrice.toLocaleString()} GNF</Text>
+                    <Text style={styles.priceRowVal}>{priceInfo.totalWeek.toLocaleString()} GNF</Text>
+                  </View>
+                )}
+                {priceInfo.weekendDays > 0 && (
+                  <View style={styles.priceRow}>
+                    <Text style={styles.priceRowLabel}>{priceInfo.weekendDays} jour(s) week-end × {priceInfo.wEPrice.toLocaleString()} GNF</Text>
+                    <Text style={styles.priceRowVal}>{priceInfo.totalWeekend.toLocaleString()} GNF</Text>
+                  </View>
+                )}
+                {priceInfo.percentage > 0 && (
+                  <View style={styles.priceRow}>
+                    <Text style={[styles.priceRowLabel, { color: '#10B981' }]}>Réduction {priceInfo.percentage}%</Text>
+                    <Text style={[styles.priceRowVal, { color: '#10B981' }]}>-{priceInfo.discountAmount.toLocaleString()} GNF</Text>
+                  </View>
+                )}
+                <View style={[styles.priceRow, styles.priceRowTotal]}>
+                  <Text style={styles.priceRowTotalLabel}>TOTAL ({priceInfo.totalDays} jour{priceInfo.totalDays > 1 ? 's' : ''})</Text>
+                  <Text style={styles.priceRowTotalVal}>{priceInfo.total.toLocaleString()} GNF</Text>
                 </View>
                 {car.requires_deposit && car.deposit_amount > 0 && (
                   <View style={styles.priceRow}>
-                    <Text style={styles.priceRowLabel}>Caution</Text>
+                    <Text style={styles.priceRowLabel}>Caution (remboursable)</Text>
                     <Text style={styles.priceRowVal}>{Number(car.deposit_amount).toLocaleString()} GNF</Text>
                   </View>
                 )}
@@ -350,18 +482,171 @@ export default function CarDetailScreen() {
             )}
 
             <TouchableOpacity
-              style={[styles.confirmBtn, (bookingLoading || days <= 0) && styles.bookBtnDisabled]}
+              style={[styles.confirmBtn, (bookingLoading || !priceInfo) && styles.bookBtnDisabled]}
               onPress={handleBook}
-              disabled={bookingLoading || days <= 0}
+              disabled={bookingLoading || !priceInfo}
             >
               {bookingLoading
                 ? <ActivityIndicator color={COLORS.bg} />
-                : <Text style={styles.confirmBtnText}>CONFIRMER LA DEMANDE</Text>
+                : <Text style={styles.confirmBtnText}>CONFIRMER — {priceInfo ? priceInfo.total.toLocaleString() : '0'} GNF</Text>
               }
             </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+const DAY_LABELS = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
+
+function CalendarPicker({
+  startDate, endDate, bookedRanges, onSelect,
+}: {
+  startDate: string;
+  endDate: string;
+  bookedRanges: Array<{ start_date: string; end_date: string }>;
+  onSelect: (start: string, end: string) => void;
+}) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [viewDate, setViewDate] = useState(today);
+
+  const startVal = startDate ? new Date(startDate + "T00:00:00") : null;
+  const endVal = endDate ? new Date(endDate + "T00:00:00") : null;
+
+  const calStart = startOfWeek(startOfMonth(viewDate), { weekStartsOn: 1 });
+  const calEnd = endOfWeek(endOfMonth(viewDate), { weekStartsOn: 1 });
+  const days = eachDayOfInterval({ start: calStart, end: calEnd });
+
+  const isBooked = (date: Date) =>
+    bookedRanges.some((r) => {
+      const s = new Date(r.start_date + "T00:00:00");
+      const e = new Date(r.end_date + "T00:00:00");
+      return !isBefore(date, s) && !isAfter(date, e);
+    });
+
+  const isPast = (date: Date) => isBefore(date, today);
+
+  const isInRange = (date: Date) => {
+    if (!startVal || !endVal) return false;
+    return isAfter(date, startVal) && isBefore(date, endVal);
+  };
+
+  const hasBookedInRange = (from: Date, to: Date) =>
+    eachDayOfInterval({ start: from, end: to }).some((d) => isBooked(d));
+
+  const handlePress = (day: Date) => {
+    if (isPast(day) || isBooked(day)) return;
+    const dayStr = format(day, "yyyy-MM-dd");
+    if (!startVal || endVal) {
+      onSelect(dayStr, "");
+    } else if (isBefore(day, startVal) || isSameDay(day, startVal)) {
+      onSelect(dayStr, "");
+    } else if (hasBookedInRange(startVal, day)) {
+      onSelect(dayStr, "");
+    } else {
+      onSelect(startDate, dayStr);
+    }
+  };
+
+  const isPrevDisabled = isSameMonth(viewDate, today);
+  const monthLabel = format(viewDate, "MMMM yyyy", { locale: fr });
+  const monthLabelCap = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+
+  return (
+    <View>
+      {/* Navigation mois */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <TouchableOpacity
+          onPress={() => { if (!isPrevDisabled) setViewDate(subMonths(viewDate, 1)); }}
+          style={{ padding: 8, opacity: isPrevDisabled ? 0.3 : 1 }}
+        >
+          <Ionicons name="chevron-back" size={20} color={COLORS.accent} />
+        </TouchableOpacity>
+        <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 15 }}>{monthLabelCap}</Text>
+        <TouchableOpacity onPress={() => setViewDate(addMonths(viewDate, 1))} style={{ padding: 8 }}>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.accent} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Jours de la semaine */}
+      <View style={{ flexDirection: "row", marginBottom: 6 }}>
+        {DAY_LABELS.map((d) => (
+          <View key={d} style={{ flex: 1, alignItems: "center" }}>
+            <Text style={{ fontSize: 11, color: COLORS.textMuted, fontWeight: "700" }}>{d}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Grille des jours */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+        {days.map((day) => {
+          const other = !isSameMonth(day, viewDate);
+          if (other) return <View key={day.toISOString()} style={{ width: "14.28%", height: 40 }} />;
+
+          const booked = isBooked(day);
+          const past = isPast(day);
+          const isStart = !!(startVal && isSameDay(day, startVal));
+          const isEnd = !!(endVal && isSameDay(day, endVal));
+          const inRange = isInRange(day);
+          const isToday = isSameDay(day, today);
+          const disabled = past || booked;
+
+          return (
+            <TouchableOpacity
+              key={day.toISOString()}
+              style={{
+                width: "14.28%", height: 40,
+                alignItems: "center", justifyContent: "center",
+                backgroundColor: (isStart || isEnd) ? COLORS.accent : inRange ? "rgba(255,215,0,0.15)" : "transparent",
+                borderRadius: 20,
+              }}
+              onPress={() => handlePress(day)}
+              disabled={disabled}
+              activeOpacity={0.7}
+            >
+              <Text style={{
+                fontSize: 13,
+                fontWeight: (isStart || isEnd || isToday) ? "900" : "500",
+                color: (isStart || isEnd) ? COLORS.bg : booked ? "#333" : past ? "#444" : COLORS.text,
+                textDecorationLine: booked ? "line-through" : "none",
+              }}>
+                {format(day, "d")}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Affichage dates sélectionnées */}
+      <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+        <View style={{ flex: 1, backgroundColor: "#000", borderRadius: 10, padding: 10, borderWidth: 1, borderColor: startDate ? COLORS.accent : "#333" }}>
+          <Text style={{ fontSize: 9, color: COLORS.accent, fontWeight: "900", marginBottom: 3 }}>DÉPART</Text>
+          <Text style={{ fontSize: 13, color: startDate ? COLORS.text : COLORS.textMuted, fontWeight: "600" }}>
+            {startDate || "—"}
+          </Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: "#000", borderRadius: 10, padding: 10, borderWidth: 1, borderColor: endDate ? COLORS.accent : "#333" }}>
+          <Text style={{ fontSize: 9, color: COLORS.accent, fontWeight: "900", marginBottom: 3 }}>RETOUR</Text>
+          <Text style={{ fontSize: 13, color: endDate ? COLORS.text : COLORS.textMuted, fontWeight: "600" }}>
+            {endDate || "—"}
+          </Text>
+        </View>
+      </View>
+
+      {/* Légende */}
+      <View style={{ flexDirection: "row", gap: 16, marginTop: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.accent }} />
+          <Text style={{ fontSize: 10, color: COLORS.textMuted }}>Sélectionné</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: "#222" }} />
+          <Text style={{ fontSize: 10, color: COLORS.textMuted }}>Indisponible</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -474,6 +759,7 @@ const styles = StyleSheet.create({
   modalBox: {
     backgroundColor: COLORS.card, borderTopLeftRadius: 28, borderTopRightRadius: 28,
     padding: 24, paddingBottom: Platform.OS === "ios" ? 44 : 24,
+    maxHeight: "90%",
   },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   modalTitle: { fontSize: 20, fontWeight: "900", color: COLORS.text },
@@ -488,9 +774,30 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
   priceRowLabel: { fontSize: 13, color: COLORS.textMuted },
   priceRowVal: { fontSize: 13, color: COLORS.accent, fontWeight: "700" },
+  priceRowTotal: { borderTopWidth: 1, borderTopColor: "#333", marginTop: 6, paddingTop: 8 },
+  priceRowTotalLabel: { fontSize: 13, color: COLORS.text, fontWeight: "800" },
+  priceRowTotalVal: { fontSize: 15, color: COLORS.accent, fontWeight: "900" },
   confirmBtn: {
     backgroundColor: COLORS.accent, borderRadius: 14,
     paddingVertical: 16, alignItems: "center", marginTop: 4,
   },
   confirmBtnText: { color: COLORS.bg, fontWeight: "900", fontSize: 14 },
+
+  reportBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingVertical: 10, marginBottom: 24,
+  },
+  reportBtnText: { fontSize: 12, color: COLORS.textMuted, fontWeight: "500" },
+
+  // Reviews
+  reviewCard: {
+    backgroundColor: "#000", borderRadius: 14, padding: 14, marginBottom: 10,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  reviewHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+  reviewerName: { fontSize: 13, fontWeight: "700", color: COLORS.text },
+  reviewDate: { fontSize: 11, color: COLORS.textMuted },
+  reviewStars: { flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 6 },
+  reviewRatingNum: { fontSize: 11, color: COLORS.textMuted, marginLeft: 4, fontWeight: "700" },
+  reviewComment: { fontSize: 13, color: "#D1D5DB", lineHeight: 20 },
 });

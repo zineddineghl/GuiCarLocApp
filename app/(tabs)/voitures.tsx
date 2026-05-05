@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -50,9 +50,11 @@ export default function VoituresScreen() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    fetchCars();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchCars();
+    }, [])
+  );
 
   const fetchCars = async () => {
     setLoading(true);

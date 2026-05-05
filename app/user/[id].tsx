@@ -7,6 +7,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -165,6 +166,15 @@ export default function UserProfileScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.topNav}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.accent} />
+        </TouchableOpacity>
+        <Text style={styles.topNavTitle}>PROFIL</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header Photo & Identity */}
         <View style={styles.headerCard}>
@@ -346,6 +356,28 @@ export default function UserProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   centered: { justifyContent: "center", alignItems: "center" },
+  topNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === "ios" ? 60 : 40,
+    paddingBottom: 20,
+    backgroundColor: COLORS.bg,
+  },
+  backBtn: {
+    padding: 8,
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  topNavTitle: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 2,
+  },
   headerCard: {
     alignItems: "center",
     paddingVertical: 40,
